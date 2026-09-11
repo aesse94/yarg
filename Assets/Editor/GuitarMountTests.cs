@@ -501,43 +501,57 @@ namespace YARG.Editor
                 return;
             }
 
-            var setting = new YARG.Settings.Types.CustomCharacterSetting(
+            var vocalsSetting = new YARG.Settings.Types.CustomCharacterSetting(
                 string.Empty, VenueCharacter.CharacterType.Vocals);
 
-            string folder = setting.CustomCharacterPath;
+            string folder = vocalsSetting.CustomCharacterPath;
             var staged = new List<string>();
 
             try
             {
-                // Stage two rebuilt bundles into the real customization folder.
-                foreach (var source in Directory.GetFiles(REBUILT, "*.yargchar").OrderBy(f => f).Take(2))
+                // One character of each type, so the filter is proved in both directions.
+                string vocalist = Path.Combine(REBUILT, "ozzy.yargchar");
+                string drummer = Path.Combine(REBUILT, "travisbarker.yargchar");
+
+                if (!Check(File.Exists(vocalist) && File.Exists(drummer),
+                    "a Vocals and a Drums character are available to stage"))
+                {
+                    return;
+                }
+
+                foreach (var source in new[] { vocalist, drummer })
                 {
                     string destination = Path.Combine(folder, Path.GetFileName(source));
                     File.Copy(source, destination, true);
                     staged.Add(destination);
                 }
 
-                Check(staged.Count == 2, $"staged 2 bundles into {folder} (got {staged.Count})");
+                string stagedVocalist = staged[0];
+                string stagedDrummer = staged[1];
 
-                setting.UpdateValues();
-                var values = setting.PossibleValues;
+                vocalsSetting.UpdateValues();
+                var vocalsValues = vocalsSetting.PossibleValues;
 
-                foreach (var path in staged)
-                {
-                    string label = Path.GetFileNameWithoutExtension(path);
-                    Check(values.Contains(path),
-                        $"'{label}' is listed in the vocals dropdown");
-                    Check(setting.ValueToString(path) != "None",
-                        $"'{label}' has a display name (got '{setting.ValueToString(path)}')");
-                }
-
-                // A Vocals-typed character must NOT appear in a different slot's dropdown.
                 var drumsSetting = new YARG.Settings.Types.CustomCharacterSetting(
                     string.Empty, VenueCharacter.CharacterType.Drums);
                 drumsSetting.UpdateValues();
+                var drumsValues = drumsSetting.PossibleValues;
 
-                Check(staged.All(p => !drumsSetting.PossibleValues.Contains(p)),
-                    "Vocals characters are excluded from the Drums dropdown");
+                // A character reaches the dropdown only if the bundle loads at the game's
+                // prefab path, has Vrm10Instance on the root, and its Type matches.
+                Check(vocalsValues.Contains(stagedVocalist),
+                    "Vocals character is listed in the vocals dropdown");
+                Check(vocalsSetting.ValueToString(stagedVocalist) != "None",
+                    $"Vocals character has a display name " +
+                    $"(got '{vocalsSetting.ValueToString(stagedVocalist)}')");
+
+                Check(!vocalsValues.Contains(stagedDrummer),
+                    "Drums character is NOT listed in the vocals dropdown");
+
+                Check(drumsValues.Contains(stagedDrummer),
+                    "Drums character is listed in the drums dropdown");
+                Check(!drumsValues.Contains(stagedVocalist),
+                    "Vocals character is NOT listed in the drums dropdown");
             }
             finally
             {

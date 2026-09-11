@@ -4,6 +4,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UniVRM10;
+using YARG.Core.Song;
 using YARG.Venue;
 using YARG.Venue.Characters;
 
@@ -41,7 +42,8 @@ namespace YARG.Editor
         }
 
         public static bool BuildBundle(string vrmPath, string outDir,
-            VenueCharacter.CharacterType characterType = VenueCharacter.CharacterType.Vocals)
+            VenueCharacter.CharacterType characterType = VenueCharacter.CharacterType.Vocals,
+            VocalGender characterGender = VocalGender.Unspecified)
         {
             string prefabPath = null;
             string vrmAssetPath = null;
@@ -90,6 +92,7 @@ namespace YARG.Editor
                 // settings dropdown lists it. Left at its default it is Bass, so a custom
                 // vocalist would replace the bassist and never appear in the vocals list.
                 venueCharacter.Type = characterType;
+                venueCharacter.CharacterGender = characterGender;
 
                 go.SetActive(false);
 
@@ -112,8 +115,8 @@ namespace YARG.Editor
                     EditorUserBuildSettings.activeBuildTarget);
 
                 string bundle = Path.Combine(outDir, assetName + ".yargchar");
-                Debug.Log($"[VrmYargcharBuilder] Built {bundle} as {characterType} " +
-                    $"({new FileInfo(bundle).Length} bytes)");
+                Debug.Log($"[VrmYargcharBuilder] Built {bundle} as {characterType}/" +
+                    $"{characterGender} ({new FileInfo(bundle).Length} bytes)");
                 return File.Exists(bundle);
             }
             catch (Exception e)

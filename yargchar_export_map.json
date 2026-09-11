@@ -1,0 +1,14 @@
+{
+    "Entries": [
+        { "Name": "ozzy",           "Type": "Vocals", "Gender": "Male"        },
+        { "Name": "sting",          "Type": "Vocals", "Gender": "Male"        },
+        { "Name": "hayleywilliams", "Type": "Vocals", "Gender": "Female"      },
+        { "Name": "billy",          "Type": "Vocals", "Gender": "Male"        },
+        { "Name": "jimi",           "Type": "Guitar", "Gender": "Male"        },
+        { "Name": "zakkwylde",      "Type": "Guitar", "Gender": "Male"        },
+        { "Name": "tednugent",      "Type": "Guitar", "Gender": "Male"        },
+        { "Name": "travisbarker",   "Type": "Drums",  "Gender": "Male"        },
+        { "Name": "rockbot",        "Type": "Vocals", "Gender": "Male"        },
+        { "Name": "skeleton",       "Type": "Vocals", "Gender": "Unspecified" }
+    ]
+}

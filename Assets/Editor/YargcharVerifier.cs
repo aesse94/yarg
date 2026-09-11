@@ -21,6 +21,7 @@ namespace YARG.Editor
             var args = Environment.GetCommandLineArgs();
             string dir = GetArg(args, "-dir");
             var expectedType = VrmYargcharBuilder.ParseCharacterType(GetArg(args, "-type"));
+            var map = YargcharExportMap.Load(GetArg(args, "-map"));
 
             if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
             {
@@ -76,10 +77,37 @@ namespace YARG.Editor
                         continue;
                     }
 
-                    if (character.Type != expectedType)
+                    // With a map, each character is checked against its own expected
+                    // values rather than one blanket type.
+                    var wantType = expectedType;
+                    var wantGender = character.CharacterGender;
+                    string stem = Path.GetFileNameWithoutExtension(file);
+
+                    if (map != null)
+                    {
+                        if (!map.TryGet(stem, out var settings))
+                        {
+                            Debug.LogError($"[YargcharVerify] FAIL {name}: no entry in the export map");
+                            fail++;
+                            continue;
+                        }
+
+                        wantType = settings.Type;
+                        wantGender = settings.Gender;
+                    }
+
+                    if (character.Type != wantType)
                     {
                         Debug.LogError($"[YargcharVerify] FAIL {name}: Type is {character.Type}, " +
-                            $"expected {expectedType}");
+                            $"expected {wantType}");
+                        fail++;
+                        continue;
+                    }
+
+                    if (character.CharacterGender != wantGender)
+                    {
+                        Debug.LogError($"[YargcharVerify] FAIL {name}: gender is " +
+                            $"{character.CharacterGender}, expected {wantGender}");
                         fail++;
                         continue;
                     }
