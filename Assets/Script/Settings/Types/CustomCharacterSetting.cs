@@ -81,7 +81,7 @@ namespace YARG.Settings.Types
                 }
 
                 var venueCharacter = character.GetComponent<VenueCharacter>();
-                if (venueCharacter != null && venueCharacter.Type != _characterType)
+                if (venueCharacter != null && venueCharacter.Type == _characterType)
                 {
                     _possibleValues.Add(file);
                     _fileToName[file] = name;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -45,6 +46,7 @@ namespace YARG.Editor
                 TestDropdownWiring();
                 ReportHeuristicOnly();
                 TestVocalistSelection();
+                TestCharacterDropdown();
             }
             catch (Exception e)
             {
@@ -471,6 +473,98 @@ namespace YARG.Editor
                   VocalistSelector.SlotForGender(VocalGender.Other) == VocalistSelector.Slot.Default &&
                   VocalistSelector.SlotForGender(VocalGender.Unspecified) == VocalistSelector.Slot.Default,
                 "slot mapping covers every VocalGender value");
+        }
+
+        /// <summary>
+        /// End-to-end check on the custom character dropdown: a rebuilt .yargchar must
+        /// actually reach the vocals list. This covers all three bugs at once - the prefab
+        /// path (or the bundle loads as null), the stamped Type (or the filter excludes it),
+        /// and the filter direction itself.
+        /// </summary>
+        private static void TestCharacterDropdown()
+        {
+            Log("=== custom character dropdown ===");
+
+            const string REBUILT = "/root/yargchar_out";
+            if (!Directory.Exists(REBUILT))
+            {
+                LogFail($"rebuilt character bundles not found at {REBUILT}");
+                return;
+            }
+
+            // PathHelper.Init is [RuntimeInitializeOnLoadMethod], so it never runs in a
+            // batchmode edit-mode session and PersistentDataPath stays null. The character
+            // dropdown reads it, so prime it the way the runtime would.
+            if (!EnsurePathHelperInitialized())
+            {
+                LogFail("could not initialize PathHelper; character dropdown not testable");
+                return;
+            }
+
+            var setting = new YARG.Settings.Types.CustomCharacterSetting(
+                string.Empty, VenueCharacter.CharacterType.Vocals);
+
+            string folder = setting.CustomCharacterPath;
+            var staged = new List<string>();
+
+            try
+            {
+                // Stage two rebuilt bundles into the real customization folder.
+                foreach (var source in Directory.GetFiles(REBUILT, "*.yargchar").OrderBy(f => f).Take(2))
+                {
+                    string destination = Path.Combine(folder, Path.GetFileName(source));
+                    File.Copy(source, destination, true);
+                    staged.Add(destination);
+                }
+
+                Check(staged.Count == 2, $"staged 2 bundles into {folder} (got {staged.Count})");
+
+                setting.UpdateValues();
+                var values = setting.PossibleValues;
+
+                foreach (var path in staged)
+                {
+                    string label = Path.GetFileNameWithoutExtension(path);
+                    Check(values.Contains(path),
+                        $"'{label}' is listed in the vocals dropdown");
+                    Check(setting.ValueToString(path) != "None",
+                        $"'{label}' has a display name (got '{setting.ValueToString(path)}')");
+                }
+
+                // A Vocals-typed character must NOT appear in a different slot's dropdown.
+                var drumsSetting = new YARG.Settings.Types.CustomCharacterSetting(
+                    string.Empty, VenueCharacter.CharacterType.Drums);
+                drumsSetting.UpdateValues();
+
+                Check(staged.All(p => !drumsSetting.PossibleValues.Contains(p)),
+                    "Vocals characters are excluded from the Drums dropdown");
+            }
+            finally
+            {
+                foreach (var path in staged)
+                {
+                    try { File.Delete(path); } catch { /* best effort */ }
+                }
+            }
+        }
+
+        private static bool EnsurePathHelperInitialized()
+        {
+            if (!string.IsNullOrEmpty(YARG.Helpers.PathHelper.PersistentDataPath))
+            {
+                return true;
+            }
+
+            var init = typeof(YARG.Helpers.PathHelper).GetMethod("Init",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+            if (init == null)
+            {
+                return false;
+            }
+
+            init.Invoke(null, null);
+            return !string.IsNullOrEmpty(YARG.Helpers.PathHelper.PersistentDataPath);
         }
 
         // ---- helpers ----
