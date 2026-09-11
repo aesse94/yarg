@@ -194,9 +194,11 @@ namespace YARG.Menu.Settings
             CurrentTab?.OnTabExit();
 
             CurrentTab = tab;
-            Refresh();
 
+            // Refresh dropdown option sources BEFORE building visuals,
+            // so custom content scanned in OnTabEnter is included.
             CurrentTab?.OnTabEnter();
+            Refresh();
 
             _searchBarContainer.SetActive(CurrentTab?.ShowSearchBar ?? false);
             _searchBar.text = string.Empty;

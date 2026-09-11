@@ -12,6 +12,17 @@ namespace YARG.Settings.Metadata
 {
     public class MetadataTab : Tab, IEnumerable<AbstractMetadata>
     {
+        public override void OnTabEnter()
+        {
+            base.OnTabEnter();
+
+            // Re-scan dropdowns whose options are sourced from the custom-content
+            // folders (characters, guitars) so files added after launch appear
+            // without a game restart. Cheap: no-op unless the menus are open.
+            SettingsManager.Settings.CustomVocalsCharacter.UpdateValues();
+            SettingsManager.Settings.CustomVocalsCharacterFemale.UpdateValues();
+            SettingsManager.Settings.CustomGuitar.UpdateValues();
+        }
         // Prefabs needed for this tab type
         private static GameObject _headerPrefab;
         private static GameObject _buttonPrefab;
