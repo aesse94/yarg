@@ -502,12 +502,22 @@ namespace YARG.Gameplay
 
         private async UniTask LoadCustomCharacter(GameObject venueRoot)
         {
-            string characterPath = SettingsManager.Settings.CustomVocalsCharacter.Value;
+            // Pick the vocalist slot that matches the song's tagged vocal gender, falling
+            // back to the default slot when the song is untagged or the matched slot is empty.
+            var vocalGender = GameManager.Song?.VocalGender ?? VocalGender.Unspecified;
+            string characterPath = VocalistSelector.SelectVocalistPath(
+                vocalGender,
+                SettingsManager.Settings.CustomVocalsCharacter.Value,
+                SettingsManager.Settings.CustomVocalsCharacterFemale.Value,
+                SettingsManager.Settings.AutoSelectVocalistByGender.Value);
 
             if (string.IsNullOrEmpty(characterPath))
             {
                 return;
             }
+
+            YargLogger.LogFormatInfo<VocalGender, string>(
+                "Song vocal gender {0}; loading vocalist '{1}'", vocalGender, characterPath);
 
             var bundle = AssetBundle.LoadFromFile(characterPath);
 

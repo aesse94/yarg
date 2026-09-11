@@ -3,6 +3,8 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using YARG.Core.Song;
+using YARG.Venue.Characters;
 using YARG.Venue.Guitars;
 
 namespace YARG.Editor
@@ -42,6 +44,7 @@ namespace YARG.Editor
                 TestCharacterA();
                 TestDropdownWiring();
                 ReportHeuristicOnly();
+                TestVocalistSelection();
             }
             catch (Exception e)
             {
@@ -401,6 +404,73 @@ namespace YARG.Editor
             }
 
             EditorApplication.Exit(0);
+        }
+
+        /// <summary>
+        /// Per-song vocalist auto-selection. The rule is a pure function, so it is tested
+        /// exhaustively here without a venue or play mode; the spawn path that consumes it
+        /// (BackgroundManager.LoadCustomCharacter) still needs play mode to verify.
+        /// </summary>
+        private static void TestVocalistSelection()
+        {
+            Log("=== per-song vocalist selection ===");
+
+            string male = Path.Combine(TESTBED, "characters/character_a.vrm");
+            string female = Path.Combine(TESTBED, "characters/character_b.vrm");
+
+            Check(File.Exists(male) && File.Exists(female),
+                "both test character VRMs are present");
+
+            // Gender -> slot, with both slots configured and auto-select on.
+            var cases = new (VocalGender Gender, string Expected, string Label)[]
+            {
+                (VocalGender.Male,        male,   "Male -> default vocalist"),
+                (VocalGender.Female,      female, "Female -> female vocalist"),
+                (VocalGender.Nonbinary,   female, "Nonbinary -> female vocalist"),
+                (VocalGender.Other,       male,   "Other -> default vocalist"),
+                (VocalGender.Unspecified, male,   "Unspecified -> default vocalist"),
+            };
+
+            foreach (var (gender, expected, label) in cases)
+            {
+                var actual = VocalistSelector.SelectVocalistPath(gender, male, female, true);
+                Check(actual == expected,
+                    $"{label} (got '{Path.GetFileNameWithoutExtension(actual)}')");
+            }
+
+            // Auto-select disabled: the default slot wins regardless of tag.
+            foreach (var gender in (VocalGender[]) Enum.GetValues(typeof(VocalGender)))
+            {
+                var actual = VocalistSelector.SelectVocalistPath(gender, male, female, false);
+                Check(actual == male,
+                    $"auto-select off: {gender} uses the default vocalist " +
+                    $"(got '{Path.GetFileNameWithoutExtension(actual)}')");
+            }
+
+            // Never blank the stage: a female-tagged song with no female slot configured
+            // falls back to the default rather than resolving to nothing.
+            Check(VocalistSelector.SelectVocalistPath(VocalGender.Female, male, string.Empty, true) == male,
+                "Female song with empty female slot falls back to the default vocalist");
+            Check(VocalistSelector.SelectVocalistPath(VocalGender.Nonbinary, male, null, true) == male,
+                "Nonbinary song with unset female slot falls back to the default vocalist");
+
+            // Nothing configured at all means "leave the venue's own vocalist alone".
+            Check(VocalistSelector.SelectVocalistPath(VocalGender.Female, string.Empty, string.Empty, true)
+                    == string.Empty,
+                "no slots configured resolves to empty (venue vocalist untouched)");
+
+            // Only a female slot configured: a male song must not silently borrow it.
+            Check(VocalistSelector.SelectVocalistPath(VocalGender.Male, string.Empty, female, true)
+                    == string.Empty,
+                "Male song does not borrow the female slot when the default is empty");
+
+            // Slot mapping is independent of which files are configured.
+            Check(VocalistSelector.SlotForGender(VocalGender.Female) == VocalistSelector.Slot.Female &&
+                  VocalistSelector.SlotForGender(VocalGender.Nonbinary) == VocalistSelector.Slot.Female &&
+                  VocalistSelector.SlotForGender(VocalGender.Male) == VocalistSelector.Slot.Default &&
+                  VocalistSelector.SlotForGender(VocalGender.Other) == VocalistSelector.Slot.Default &&
+                  VocalistSelector.SlotForGender(VocalGender.Unspecified) == VocalistSelector.Slot.Default,
+                "slot mapping covers every VocalGender value");
         }
 
         // ---- helpers ----

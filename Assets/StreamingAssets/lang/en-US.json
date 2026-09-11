@@ -1697,6 +1697,14 @@
                 "Name": "Custom Vocals Character",
                 "Description": "Select a custom vocals character to use in venues that support characters."
             },
+            "CustomVocalsCharacterFemale": {
+                "Name": "Custom Vocals Character (Female)",
+                "Description": "Vocalist used for songs tagged with female or nonbinary vocals, when automatic selection is enabled."
+            },
+            "AutoSelectVocalistByGender": {
+                "Name": "Auto-Select Vocalist By Gender",
+                "Description": "Pick the vocalist to match the song's tagged vocal gender. When off, the default vocalist is always used."
+            },
             "CustomGuitar": {
                 "Name": "Custom Guitar",
                 "Description": "Select a custom guitar model (.glb) to mount on characters in venues that support characters."

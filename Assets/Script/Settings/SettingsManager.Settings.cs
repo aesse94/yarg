@@ -600,6 +600,8 @@ namespace YARG.Settings
             public OutputChannelSetting OutputChannelMetronome { get; } = new(-1, OutputChannelMetronomeCallback);
 
             public CustomCharacterSetting CustomVocalsCharacter { get; } = new(string.Empty, VenueCharacter.CharacterType.Vocals, CustomCharacterCallback);
+            public CustomCharacterSetting CustomVocalsCharacterFemale { get; } = new(string.Empty, VenueCharacter.CharacterType.Vocals, CustomCharacterCallback);
+            public ToggleSetting AutoSelectVocalistByGender { get; } = new(true);
             public CustomGuitarSetting CustomGuitar { get; } = new(string.Empty, CustomGuitarCallback);
             #endregion
 

@@ -241,6 +241,8 @@ namespace YARG.Settings
                 new HeaderMetadata("Other"),
                 nameof(Settings.BandComboTypeSetting),
                 nameof(Settings.CustomVocalsCharacter),
+                nameof(Settings.CustomVocalsCharacterFemale),
+                nameof(Settings.AutoSelectVocalistByGender),
                 nameof(Settings.CustomGuitar),
                 nameof(Settings.DataStreamEnable),
                 nameof(Settings.SaveScoresWithBots),
