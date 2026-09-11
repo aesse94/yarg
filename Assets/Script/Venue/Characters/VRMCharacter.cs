@@ -7,6 +7,7 @@ using YARG.Core.Chart;
 using YARG.Core.Logging;
 using LipsyncType = YARG.Core.Chart.LipsyncEvent.LipsyncType;
 using YARG.Gameplay;
+using YARG.Venue.Effects;
 using YARG.Venue.Guitars;
 using YARG.Venue.VenueCamera;
 
@@ -72,6 +73,9 @@ namespace YARG.Venue.Characters
         // Custom guitar prop mounted onto this character's guitar skeleton, if any.
         private GuitarMounter.MountResult _guitarMount;
 
+        // Hand flames while this character's player holds full multiplier.
+        private BurningHands _burningHands;
+
         public override void Initialize(CharacterManager characterManager = null)
         {
             _initialPosition = transform.position;
@@ -102,6 +106,31 @@ namespace YARG.Venue.Characters
             base.Initialize(characterManager);
 
             MountCustomGuitar();
+            SetUpBurningHands();
+        }
+
+        /// <summary>
+        /// Attaches hand flames driven by the matching player's multiplier. Non-fatal: a rig
+        /// without hand bones, or a character with no matching player, simply never burns.
+        /// </summary>
+        private void SetUpBurningHands()
+        {
+            if (_burningHands != null)
+            {
+                return;
+            }
+
+            _burningHands = gameObject.AddComponent<BurningHands>();
+
+            if (!_burningHands.Initialize())
+            {
+                Destroy(_burningHands);
+                _burningHands = null;
+                return;
+            }
+
+            _burningHands.StateSource = BurningHandsBinder.ForCharacter(Type,
+                () => _characterManager != null ? _characterManager.Players : null);
         }
 
         /// <summary>
@@ -125,6 +154,12 @@ namespace YARG.Venue.Characters
 
         private void OnDestroy()
         {
+            if (_burningHands != null)
+            {
+                _burningHands.ReleaseEmitters();
+                _burningHands = null;
+            }
+
             if (_guitarMount != null)
             {
                 GuitarMounter.Unmount(_guitarMount);

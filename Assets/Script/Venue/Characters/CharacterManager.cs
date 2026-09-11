@@ -75,6 +75,9 @@ namespace YARG.Venue.Characters
 
         public double SongTime => GameManager.SongTime;
 
+        /// <summary>Players in the current song, for character effects that react to play.</summary>
+        public IReadOnlyList<YARG.Gameplay.Player.BasePlayer> Players => GameManager.Players;
+
         protected override void OnChartLoaded(SongChart chart)
         {
             // Get the expert notes for each track

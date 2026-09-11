@@ -4,7 +4,9 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using YARG.Core;
 using YARG.Core.Song;
+using YARG.Venue.Effects;
 using YARG.Venue.Characters;
 using YARG.Venue.Guitars;
 
@@ -47,6 +49,7 @@ namespace YARG.Editor
                 ReportHeuristicOnly();
                 TestVocalistSelection();
                 TestCharacterDropdown();
+                TestBurningHands();
             }
             catch (Exception e)
             {
@@ -560,6 +563,135 @@ namespace YARG.Editor
                     try { File.Delete(path); } catch { /* best effort */ }
                 }
             }
+        }
+
+        /// <summary>
+        /// Hand flames: bone attachment by name, pooling, the multiplier trigger, and the
+        /// guarantee that no character material is mutated.
+        /// </summary>
+        private static void TestBurningHands()
+        {
+            Log("=== burning hands ===");
+
+            FlameEmitterPool.Clear();
+
+            // 1. The procedural flame asset builds without any imported art.
+            var texture = FlameTexture.Get();
+            Check(texture != null && texture.width > 0 && texture.height > 0,
+                $"procedural flame texture generated ({texture?.width}x{texture?.height})");
+
+            // 2. The trigger rule, independent of any rig. Guitar caps at 4, bass at 6.
+            var rules = new (int Multiplier, bool StarPower, int Cap, bool Expected, string Label)[]
+            {
+                (1, false, 4, false, "1x does not burn"),
+                (3, false, 4, false, "3x does not burn"),
+                (4, false, 4, true,  "4x burns"),
+                (8, true,  4, true,  "8x with Star Power burns"),
+                (4, true,  4, false, "Star Power doubling 2x to 4x does NOT burn"),
+                (6, true,  4, false, "Star Power doubling 3x to 6x does NOT burn"),
+                (6, false, 6, true,  "bass 6x burns at its own cap"),
+                (12, true, 6, true,  "bass 12x with Star Power burns"),
+            };
+
+            foreach (var (multiplier, starPower, cap, expected, label) in rules)
+            {
+                var state = new BurningHands.PerformanceState(multiplier, starPower, cap);
+                Check(state.ShouldBurn == expected,
+                    $"{label} (base={state.BaseMultiplier}, cap={cap}, burns={state.ShouldBurn})");
+            }
+
+            // 3. Attachment and toggling on a real custom VRM.
+            var root = ImportAndInstantiate("characters/character_b.vrm", out var assetPath);
+            if (root == null) return;
+
+            try
+            {
+                var renderer = root.GetComponentsInChildren<SkinnedMeshRenderer>(true)
+                    .OrderByDescending(r => r.sharedMesh != null ? r.sharedMesh.subMeshCount : 0)
+                    .First();
+                var materialsBefore = (Material[]) renderer.sharedMaterials.Clone();
+
+                var hands = root.AddComponent<BurningHands>();
+                Check(hands.Initialize(), "BurningHands initialized on a custom VRM");
+                Check(hands.EmitterCount == 2,
+                    $"an emitter is attached to each hand (got {hands.EmitterCount})");
+
+                // Attached by NAME - the humanoid map on these rigs is scrambled.
+                Check(hands.LeftFlame != null && string.Equals(
+                        hands.LeftFlame.transform.parent.name, BurningHands.LEFT_HAND_BONE,
+                        StringComparison.OrdinalIgnoreCase),
+                    $"left emitter parented to '{BurningHands.LEFT_HAND_BONE}' " +
+                    $"(got '{hands.LeftFlame?.transform.parent.name}')");
+                Check(hands.RightFlame != null && string.Equals(
+                        hands.RightFlame.transform.parent.name, BurningHands.RIGHT_HAND_BONE,
+                        StringComparison.OrdinalIgnoreCase),
+                    $"right emitter parented to '{BurningHands.RIGHT_HAND_BONE}' " +
+                    $"(got '{hands.RightFlame?.transform.parent.name}')");
+
+                // 4. Starts cold.
+                Check(!hands.IsBurning, "flames start off");
+                Check(!hands.LeftFlame.emission.enabled && !hands.RightFlame.emission.enabled,
+                    "both emitters start with emission disabled");
+
+                // 5. Toggles with the multiplier.
+                var current = BurningHands.PerformanceState.Idle;
+                hands.StateSource = () => current;
+
+                current = new BurningHands.PerformanceState(4, false, 4);
+                hands.Evaluate();
+                Check(hands.IsBurning, "flames light at 4x");
+                Check(hands.LeftFlame.emission.enabled && hands.RightFlame.emission.enabled,
+                    "both emitters emit at 4x");
+
+                current = new BurningHands.PerformanceState(8, true, 4);
+                hands.Evaluate();
+                Check(hands.IsBurning, "flames stay lit at 8x with Star Power");
+
+                current = new BurningHands.PerformanceState(2, false, 4);
+                hands.Evaluate();
+                Check(!hands.IsBurning, "flames go out when the combo drops");
+                Check(!hands.LeftFlame.emission.enabled && !hands.RightFlame.emission.enabled,
+                    "both emitters stop emitting when the combo drops");
+
+                // 6. No permanent material mutation on the character.
+                var materialsAfter = renderer.sharedMaterials;
+                Check(materialsAfter.Length == materialsBefore.Length &&
+                      !materialsAfter.Where((m, i) => m != materialsBefore[i]).Any(),
+                    "character materials are untouched by the flames");
+
+                // 7. Emitters return to the pool and are reused rather than rebuilt.
+                int createdBefore = FlameEmitterPool.CreatedCount;
+                hands.ReleaseEmitters();
+                Check(hands.EmitterCount == 0, "emitters released on teardown");
+                Check(FlameEmitterPool.AvailableCount >= 2,
+                    $"released emitters returned to the pool (got {FlameEmitterPool.AvailableCount})");
+
+                Check(hands.Initialize(), "BurningHands re-initialized");
+                Check(FlameEmitterPool.CreatedCount == createdBefore,
+                    $"re-attaching reused pooled emitters, created none " +
+                    $"(created {FlameEmitterPool.CreatedCount}, was {createdBefore})");
+
+                hands.ReleaseEmitters();
+            }
+            finally
+            {
+                Cleanup(root, assetPath);
+                FlameEmitterPool.Clear();
+            }
+
+            // 8. Instrument mapping drives which character burns.
+            Check(BurningHandsBinder.CharacterTypeFor(Instrument.FiveFretGuitar)
+                    == VenueCharacter.CharacterType.Guitar,
+                "five-fret guitar maps to the guitarist");
+            Check(BurningHandsBinder.CharacterTypeFor(Instrument.FiveFretBass)
+                    == VenueCharacter.CharacterType.Bass,
+                "five-fret bass maps to the bassist");
+            Check(BurningHandsBinder.CharacterTypeFor(Instrument.ProDrums)
+                    == VenueCharacter.CharacterType.Drums,
+                "pro drums maps to the drummer");
+            Check(BurningHandsBinder.CharacterTypeFor(Instrument.Harmony)
+                    == VenueCharacter.CharacterType.Vocals,
+                "harmony vocals maps to the vocalist");
         }
 
         private static bool EnsurePathHelperInitialized()
