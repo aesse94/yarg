@@ -26,6 +26,7 @@ using YARG.Settings.Types;
 using YARG.Song;
 using YARG.Venue;
 using YARG.Venue.Characters;
+using YARG.Venue.Guitars;
 
 namespace YARG.Settings
 {
@@ -599,6 +600,7 @@ namespace YARG.Settings
             public OutputChannelSetting OutputChannelMetronome { get; } = new(-1, OutputChannelMetronomeCallback);
 
             public CustomCharacterSetting CustomVocalsCharacter { get; } = new(string.Empty, VenueCharacter.CharacterType.Vocals, CustomCharacterCallback);
+            public CustomGuitarSetting CustomGuitar { get; } = new(string.Empty, CustomGuitarCallback);
             #endregion
 
             #region Helpers
@@ -956,6 +958,13 @@ namespace YARG.Settings
             {
                 // CharacterPreviewBuilder.CharacterFile = file;
                 _ = CharacterPreviewBuilder.ChangeCharacter(file);
+            }
+
+            private static void CustomGuitarCallback(string file)
+            {
+                // Characters already on screen keep the guitar they loaded with; the new
+                // selection applies the next time a character is initialized.
+                GuitarMountService.SelectedGuitarPath = file;
             }
             #endregion
         }

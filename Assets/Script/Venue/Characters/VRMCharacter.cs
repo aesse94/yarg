@@ -7,6 +7,7 @@ using YARG.Core.Chart;
 using YARG.Core.Logging;
 using LipsyncType = YARG.Core.Chart.LipsyncEvent.LipsyncType;
 using YARG.Gameplay;
+using YARG.Venue.Guitars;
 using YARG.Venue.VenueCamera;
 
 namespace YARG.Venue.Characters
@@ -68,6 +69,9 @@ namespace YARG.Venue.Characters
 
         private CameraManager _cameraManager;
 
+        // Custom guitar prop mounted onto this character's guitar skeleton, if any.
+        private GuitarMounter.MountResult _guitarMount;
+
         public override void Initialize(CharacterManager characterManager = null)
         {
             _initialPosition = transform.position;
@@ -96,6 +100,36 @@ namespace YARG.Venue.Characters
             }
 
             base.Initialize(characterManager);
+
+            MountCustomGuitar();
+        }
+
+        /// <summary>
+        /// Mounts the user's selected custom guitar onto this character's guitar skeleton.
+        /// Failures are non-fatal: a character without a guitar bone, or with no guitar
+        /// selected, simply keeps whatever model it shipped with.
+        /// </summary>
+        private void MountCustomGuitar()
+        {
+            if (_guitarMount != null)
+            {
+                return;
+            }
+
+            string vrmName = VrmInstance != null && VrmInstance.Vrm != null && VrmInstance.Vrm.Meta != null
+                ? VrmInstance.Vrm.Meta.Name
+                : null;
+
+            _guitarMount = GuitarMountService.MountFor(gameObject, vrmName, name);
+        }
+
+        private void OnDestroy()
+        {
+            if (_guitarMount != null)
+            {
+                GuitarMounter.Unmount(_guitarMount);
+                _guitarMount = null;
+            }
         }
 
         protected override void Update()

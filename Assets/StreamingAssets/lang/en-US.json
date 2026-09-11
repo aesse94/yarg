@@ -1696,6 +1696,10 @@
             "CustomVocalsCharacter": {
                 "Name": "Custom Vocals Character",
                 "Description": "Select a custom vocals character to use in venues that support characters."
+            },
+            "CustomGuitar": {
+                "Name": "Custom Guitar",
+                "Description": "Select a custom guitar model (.glb) to mount on characters in venues that support characters."
             }
         },
         "PresetType": {
