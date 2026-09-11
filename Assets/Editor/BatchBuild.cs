@@ -31,7 +31,7 @@ namespace Editor
             }
 
             Debug.Log("[BatchBuild] Building Addressables content start");
-            settings.BuildPlayerContent();
+            AddressableAssetSettings.BuildPlayerContent();
             Debug.Log("[BatchBuild] Building Addressables content done");
             EditorApplication.Exit(0);
         }
