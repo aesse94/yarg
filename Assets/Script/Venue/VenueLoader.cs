@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Collections.Generic;
 using UnityEngine;
 using YARG.Helpers;
@@ -51,9 +51,16 @@ namespace YARG.Venue
 
             if (!SettingsManager.Settings.DisableDefaultBackground.Value && result == null)
             {
+                source = VenueSource.Global;
                 result = LoadDefaultVenue();
+                if (result != null)
+                {
+                    YargLogger.LogInfo("Venue: fell through to the built-in default venue");
+                }
             }
 
+            YargLogger.LogFormatInfo<VenueSource, string>("Venue: source={0}, type={1}", source,
+                result == null ? "NONE" : result.Type.ToString());
             return result;
         }
 
@@ -69,15 +76,32 @@ namespace YARG.Venue
             string venueFolder = VenueFolder;
             string launcherVenueFolder = PathHelper.VenuePath;
             var filePaths = new List<string>();
-            foreach (var ext in validExtensions)
-            {
-                filePaths.AddRange(Directory.EnumerateFiles(venueFolder, ext, PathHelper.SafeSearchOptions));
-            }
 
-            if (launcherVenueFolder != null && Directory.Exists(launcherVenueFolder))
+            // A pinned venue short-circuits the random pick. If the file has since been
+            // deleted we fall through to random rather than showing nothing.
+            string pinned = SettingsManager.Settings.CustomVenue.Value;
+            if (!string.IsNullOrEmpty(pinned) && File.Exists(pinned))
             {
-                // We limit ourselves to yarground here because that's all that will be downloaded by the launcher
-                filePaths.AddRange(Directory.EnumerateFiles(launcherVenueFolder, "*.yarground", PathHelper.SafeSearchOptions));
+                YargLogger.LogFormatInfo("Venue: using pinned '{0}'", pinned);
+                filePaths.Add(pinned);
+            }
+            else
+            {
+                if (!string.IsNullOrEmpty(pinned))
+                {
+                    YargLogger.LogFormatWarning("Venue: pinned '{0}' does not exist; falling back to random", pinned);
+                }
+
+                foreach (var ext in validExtensions)
+                {
+                    filePaths.AddRange(Directory.EnumerateFiles(venueFolder, ext, PathHelper.SafeSearchOptions));
+                }
+
+                if (launcherVenueFolder != null && Directory.Exists(launcherVenueFolder))
+                {
+                    // We limit ourselves to yarground here because that's all that will be downloaded by the launcher
+                    filePaths.AddRange(Directory.EnumerateFiles(launcherVenueFolder, "*.yarground", PathHelper.SafeSearchOptions));
+                }
             }
 
             while (filePaths.Count > 0)
@@ -100,12 +124,15 @@ namespace YARG.Venue
                     case ".webm":
                         return new BackgroundResult(BackgroundType.Video, File.OpenRead(file));
                     case ".yarground":
+                        YargLogger.LogFormatInfo("Venue: selected yarground '{0}'", file);
                         return new BackgroundResult(BackgroundType.Yarground, File.OpenRead(file));
                     default:
                         filePaths.RemoveAt(index);
                         break;
                 }
             }
+
+            YargLogger.LogWarning("Venue: global scan produced no usable venue");
             return null;
         }
 

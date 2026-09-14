@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
@@ -37,6 +37,7 @@ namespace YARG.Gameplay
         private const string DEFAULT_ANIMATION_CONTROLLER_PATH     = "Animations/{0}/{1}/";
         private const string DEFAULT_ANIMATION_CONTROLLER_FILENAME = "DefaultController";
         private const string DEFAULT_ANIMATION_PARAMETERS_FILENAME = "AnimatorParameters";
+        private const string FEMALE_ANIMATION_FOLDER               = "Female";
 
         private string VIDEO_PATH;
 
@@ -211,7 +212,28 @@ namespace YARG.Gameplay
             // Breaks things for other platforms, because Unity
             var bg = (GameObject) await bundle.LoadAssetAsync<GameObject>(
                 BundleBackgroundManager.BACKGROUND_PREFAB_PATH.ToLowerInvariant());
+
+            // Venues built by this repo's VenueBundleBuilder carry the prefab at
+            // Assets/VenueBundles/<name>/_Background.prefab, not the canonical path, so the
+            // lookup above returns null for every one of them. Fall back the same way
+            // LoadCharacterPrefab does for characters.
+            if (bg == null)
+            {
+                bg = BundleBackgroundManager.LoadBackgroundPrefab(bundle);
+            }
+
+            // A malformed venue must log and skip, not throw. Without this the null
+            // dereference below takes down the whole song load on the first frame.
+            if (bg == null)
+            {
+                YargLogger.LogFormatError("Venue bundle has no background prefab (looked at {0} " +
+                    "and every asset in the bundle); skipping venue", BundleBackgroundManager.BACKGROUND_PREFAB_PATH);
+                bundle.Unload(true);
+                return;
+            }
+
             var renderers = bg.GetComponentsInChildren<Renderer>(true);
+            YargLogger.LogFormatInfo("Venue: prefab '{0}' loaded, {1} renderers", bg.name, renderers.Length);
 
             // Load Metal shaders, if necessary
             shaderBundle = await BackgroundHelper.LoadMetalShaders(bundle, bg, BackgroundHelper.ExportType.Background);
@@ -230,6 +252,18 @@ namespace YARG.Gameplay
 
             var bgInstance = Instantiate(bg);
             var bundleBackgroundManager = bgInstance.GetComponent<BundleBackgroundManager>();
+
+            // Same log-and-skip rule as above: without this a venue missing the component
+            // throws one line later, so the guarantee that a bad venue cannot crash the
+            // song load would only be half true.
+            if (bundleBackgroundManager == null)
+            {
+                YargLogger.LogError("Venue prefab has no BundleBackgroundManager; skipping venue");
+                Destroy(bgInstance);
+                bundle.Unload(true);
+                return;
+            }
+
             bundleBackgroundManager.Bundle = bundle;
             bundleBackgroundManager.ShaderBundles.Add(shaderBundle);
             bundleBackgroundManager.SetupVenueCamera(bgInstance);
@@ -247,6 +281,11 @@ namespace YARG.Gameplay
             {
                 SetUpVideoTexture(songBackground);
             }
+
+            // Character slots are a property of the venue, not of the character bundle:
+            // a venue built without VenueCharacter placeholders can never show one.
+            var venueSlots = bgInstance.GetComponentsInChildren<VenueCharacter>(true);
+            YargLogger.LogFormatInfo("Venue: {0} character slot(s) in venue root", venueSlots.Length);
 
             await LoadCustomCharacter(bgInstance);
 
@@ -502,23 +541,53 @@ namespace YARG.Gameplay
 
         private async UniTask LoadCustomCharacter(GameObject venueRoot)
         {
-            // Pick the vocalist slot that matches the song's tagged vocal gender, falling
-            // back to the default slot when the song is untagged or the matched slot is empty.
-            var vocalGender = GameManager.Song?.VocalGender ?? VocalGender.Unspecified;
-            string characterPath = VocalistSelector.SelectVocalistPath(
-                vocalGender,
-                SettingsManager.Settings.CustomVocalsCharacter.Value,
-                SettingsManager.Settings.CustomVocalsCharacterFemale.Value,
-                SettingsManager.Settings.AutoSelectVocalistByGender.Value);
+            var settings = SettingsManager.Settings;
 
-            if (string.IsNullOrEmpty(characterPath))
+            // The vocalist is picked from two slots so the song's tagged gender can choose
+            // between them; every other slot is a single straight selection.
+            var vocalGender = GameManager.Song?.VocalGender ?? VocalGender.Unspecified;
+            string vocalistPath = VocalistSelector.SelectVocalistPath(
+                vocalGender,
+                settings.CustomVocalsCharacter.Value,
+                settings.CustomVocalsCharacterFemale.Value,
+                settings.AutoSelectVocalistByGender.Value);
+
+            if (!string.IsNullOrEmpty(vocalistPath))
             {
-                return;
+                YargLogger.LogFormatInfo<VocalGender, string>(
+                    "Song vocal gender {0}; loading vocalist '{1}'", vocalGender, vocalistPath);
             }
 
-            YargLogger.LogFormatInfo<VocalGender, string>(
-                "Song vocal gender {0}; loading vocalist '{1}'", vocalGender, characterPath);
+            // Slot order is fixed so a venue with several replaceable members always fills
+            // in the same order, making a failure mid-way reproducible.
+            var slots = new (VenueCharacter.CharacterType Slot, string Path)[]
+            {
+                (VenueCharacter.CharacterType.Vocals, vocalistPath),
+                (VenueCharacter.CharacterType.Guitar, settings.CustomGuitarCharacter.Value),
+                (VenueCharacter.CharacterType.Bass,   settings.CustomBassCharacter.Value),
+                (VenueCharacter.CharacterType.Drums,  settings.CustomDrumsCharacter.Value),
+                (VenueCharacter.CharacterType.Keys,   settings.CustomKeysCharacter.Value),
+            };
 
+            foreach (var (slot, path) in slots)
+            {
+                if (string.IsNullOrEmpty(path))
+                {
+                    continue;
+                }
+
+                await LoadAndReplaceCharacter(venueRoot, path, slot);
+            }
+        }
+
+        /// <summary>
+        /// Puts the character at <paramref name="characterPath"/> into <paramref name="slot"/>.
+        /// The character's own exported type is deliberately ignored: the slot comes from the
+        /// dropdown the user picked, so any character can play any instrument.
+        /// </summary>
+        private async UniTask LoadAndReplaceCharacter(GameObject venueRoot, string characterPath,
+            VenueCharacter.CharacterType slot)
+        {
             var bundle = AssetBundle.LoadFromFile(characterPath);
 
             if (bundle == null)
@@ -528,7 +597,7 @@ namespace YARG.Gameplay
 
             _bundleBackgroundManager.CharacterBundles.Add(bundle);
 
-            var character = bundle.LoadAsset<GameObject>(BundleBackgroundManager.CHARACTER_PREFAB_PATH.ToLowerInvariant());
+            var character = BundleBackgroundManager.LoadCharacterPrefab(bundle);
             if (character == null)
             {
                 YargLogger.LogFormatError("Failed to load character from {0}", characterPath);
@@ -545,8 +614,8 @@ namespace YARG.Gameplay
             // Load default animation controller and parameters if necessary
             LoadAnimationDefaults(character);
 
-            var newType = character.GetComponent<VenueCharacter>().Type;
-            // Find a character of the same type in venueRoot
+            var newType = slot;
+            // Find the venue member occupying this slot
             GameObject existingCharacter = null;
 
             var characters = venueRoot.GetComponentsInChildren<VenueCharacter>();
@@ -569,6 +638,16 @@ namespace YARG.Gameplay
             var existingParent = existingCharacter.transform.parent;
 
             var newCharacter = Instantiate(character, existingParent);
+
+            // Re-stamp the instance to the slot it is filling. Everything downstream - the
+            // microphone, the animation defaults, the guitar mount - keys off Type, so a
+            // vocalist put on guitar must stop advertising itself as the vocalist.
+            var newVenueCharacter = newCharacter.GetComponent<VenueCharacter>();
+            if (newVenueCharacter != null)
+            {
+                newVenueCharacter.Type = slot;
+            }
+
             ReplaceReferences(venueRoot, existingCharacter, newCharacter);
             existingCharacter.SetActive(false);
             Destroy(existingCharacter);
@@ -634,10 +713,33 @@ namespace YARG.Gameplay
                 if (controller == null || !vrmCharacter.UseCustomAnimations)
                 {
                     var genre = GetDefaultGenre(GameManager.Song.Genre);
-                    var charType = character.GetComponent<VenueCharacter>().Type;
+                    var venueChar = character.GetComponent<VenueCharacter>();
+                    var charType = venueChar.Type;
+
+                    // Optional female override: a female vocalist resolves
+                    // Animations/Vocals/Female/ first and falls back to the normal
+                    // genre folder when it is absent. Deliberately narrow - the
+                    // type+genre path is unchanged, gender is only an optional
+                    // first choice, so every other character behaves exactly as before.
                     var basePath = string.Format(DEFAULT_ANIMATION_CONTROLLER_PATH, charType.ToString(), genre);
+                    RuntimeAnimatorController newController = null;
+
+                    if (charType == VenueCharacter.CharacterType.Vocals &&
+                        venueChar.CharacterGender == VocalGender.Female)
+                    {
+                        var femaleBase = string.Format(DEFAULT_ANIMATION_CONTROLLER_PATH,
+                            charType.ToString(), FEMALE_ANIMATION_FOLDER);
+                        var femalePath = Path.Combine(femaleBase, DEFAULT_ANIMATION_CONTROLLER_FILENAME);
+                        newController = Resources.Load<RuntimeAnimatorController>(femalePath);
+                        if (newController != null)
+                        {
+                            basePath = femaleBase;
+                            YargLogger.LogInfo("Using female vocalist animation set");
+                        }
+                    }
+
                     var controllerPath = Path.Combine(basePath, DEFAULT_ANIMATION_CONTROLLER_FILENAME);
-                    var newController = Resources.Load<RuntimeAnimatorController>(controllerPath);
+                    newController ??= Resources.Load<RuntimeAnimatorController>(controllerPath);
                     if (newController != null)
                     {
                         animator.runtimeAnimatorController = newController;

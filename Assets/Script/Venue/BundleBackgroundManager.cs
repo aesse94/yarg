@@ -25,6 +25,75 @@ namespace YARG.Venue
         public const string BACKGOUND_OSX_MATERIAL_PREFIX = "_metal_";
         public const string BUNDLE_OSX_SUFFIX = "_metal.bytes";
 
+        /// <summary>
+        /// Loads the character prefab from a .yargchar bundle.
+        ///
+        /// The canonical path is <see cref="CHARACTER_PREFAB_PATH"/>, which is what the
+        /// current exporter writes. Bundles produced by older exporters instead contain
+        /// UniVRM's raw import prefab (Assets/VRMImport/&lt;name&gt;_yargchar.prefab), so a
+        /// straight lookup returns null and the character is silently dropped. Fall back to
+        /// the first GameObject in the bundle - these bundles carry exactly one.
+        /// </summary>
+        public static GameObject LoadCharacterPrefab(AssetBundle bundle)
+        {
+            if (bundle == null)
+            {
+                return null;
+            }
+
+            var prefab = bundle.LoadAsset<GameObject>(CHARACTER_PREFAB_PATH.ToLowerInvariant());
+            if (prefab != null)
+            {
+                return prefab;
+            }
+
+            foreach (var assetName in bundle.GetAllAssetNames())
+            {
+                prefab = bundle.LoadAsset<GameObject>(assetName);
+                if (prefab != null)
+                {
+                    return prefab;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Loads the background prefab from a .yarground bundle.
+        ///
+        /// The canonical path is <see cref="BACKGROUND_PREFAB_PATH"/>. Bundles produced by
+        /// this repo's own <c>VenueBundleBuilder</c> instead place it under
+        /// Assets/VenueBundles/&lt;name&gt;/_Background.prefab, so a straight lookup returns
+        /// null and <c>LoadYarground</c> then dereferences it. Fall back to the first
+        /// GameObject in the bundle - exactly as <see cref="LoadCharacterPrefab"/> already
+        /// does for characters, and for the same reason.
+        /// </summary>
+        public static GameObject LoadBackgroundPrefab(AssetBundle bundle)
+        {
+            if (bundle == null)
+            {
+                return null;
+            }
+
+            var prefab = bundle.LoadAsset<GameObject>(BACKGROUND_PREFAB_PATH.ToLowerInvariant());
+            if (prefab != null)
+            {
+                return prefab;
+            }
+
+            foreach (var assetName in bundle.GetAllAssetNames())
+            {
+                prefab = bundle.LoadAsset<GameObject>(assetName);
+                if (prefab != null)
+                {
+                    return prefab;
+                }
+            }
+
+            return null;
+        }
+
         private const string VENUE_LAYER_NAME = "Venue";
 
         private int _venueLayerNumber = -1;

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using TMPro;
 using UnityEngine;
@@ -80,7 +80,7 @@ namespace YARG.Settings.Metadata
             if (bundle != null)
             {
                 _characterPrefab =
-                    bundle.LoadAsset<GameObject>(BundleBackgroundManager.CHARACTER_PREFAB_PATH.ToLowerInvariant());
+                    BundleBackgroundManager.LoadCharacterPrefab(bundle);
 
                 if (_characterPrefab == null)
                 {
@@ -166,7 +166,7 @@ namespace YARG.Settings.Metadata
                     YargLogger.LogFormatError("Failed to load character bundle from {0}", CharacterFile);
                     return;
                 }
-                _characterPrefab = bundle.LoadAsset<GameObject>(BundleBackgroundManager.CHARACTER_PREFAB_PATH.ToLowerInvariant());
+                _characterPrefab = BundleBackgroundManager.LoadCharacterPrefab(bundle);
             }
             else
             {

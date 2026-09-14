@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -367,6 +367,8 @@ namespace YARG.Menu.MusicLibrary
             {
                 return;
             }
+
+            GlobalAudioHandler.PlaySoundEffect(SfxSample.MenuNavigate);
 
             _sidebar.UpdateSidebar();
             if (CurrentSelection is SongViewType song)
@@ -855,6 +857,8 @@ namespace YARG.Menu.MusicLibrary
 
         public void ExecuteGreenTapAction()
         {
+            GlobalAudioHandler.PlaySoundEffect(SfxSample.MenuSelect);
+
             if (CurrentSelection is not SongViewType)
             {
                 CurrentSelection?.PrimaryButtonClick();

@@ -100,6 +100,13 @@ namespace YARG.Menu.ScoreScreen
 
             var scoreScreenStats = GlobalVariables.State.ScoreScreenStats.Value;
 
+            // The lose stinger already played at the moment of failure, so the results
+            // screen only announces a win.
+            if (!scoreScreenStats.SongFailed)
+            {
+                GlobalAudioHandler.PlaySoundEffect(SfxSample.SongWin);
+            }
+
 #if UNITY_EDITOR || YARG_NIGHTLY_BUILD || YARG_TEST_BUILD
             // Do analysis of replay before showing any score data
             // This will make it so that if the analysis takes a while the screen is blank

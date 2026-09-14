@@ -22,6 +22,9 @@ namespace YARG.Editor
         {
             var args = Environment.GetCommandLineArgs();
             string glbDir = GetArg(args, "-glbDir");
+            // Material conversion target. Unlit by default - see VenueAssetFixer for why.
+            string matMode = (GetArg(args, "-materials") ?? "unlit").ToLowerInvariant();
+            bool unlit = matMode != "lit";
             string outDir = GetArg(args, "-outDir") ?? "build/yarground";
             if (string.IsNullOrEmpty(glbDir) || !Directory.Exists(glbDir))
             {
@@ -37,7 +40,7 @@ namespace YARG.Editor
             {
                 try
                 {
-                    bool built = BuildVenueBundle(glb, outDir);
+                    bool built = BuildVenueBundle(glb, outDir, unlit);
                     if (built) ok++; else fail++;
                 }
                 catch (Exception e)
@@ -50,7 +53,7 @@ namespace YARG.Editor
             EditorApplication.Exit(ok == glbs.Length ? 0 : 3);
         }
 
-        private static bool BuildVenueBundle(string glbPath, string outDir)
+        private static bool BuildVenueBundle(string glbPath, string outDir, bool unlit)
         {
             string assetName = Path.GetFileNameWithoutExtension(glbPath);
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -98,6 +101,16 @@ namespace YARG.Editor
             so.ApplyModifiedPropertiesWithoutUndo();
 
             venueGo.transform.position = Vector3.zero;
+
+            // 2b. The two fixes that decide whether this venue is ever visible:
+            //     put the geometry on the layer the venue camera actually draws, and
+            //     move its materials onto the render pipeline the game actually runs.
+            //     Without these the bundle loads, instantiates, counts its renderers,
+            //     and draws nothing.
+            int layered = VenueAssetFixer.ApplyVenueLayer(venueGo);
+            int converted = VenueAssetFixer.ConvertMaterialsToUrp(venueGo, assetDir, unlit);
+            Debug.Log($"[VenueBundleBuilder] {assetName}: layer applied to {layered} objects, " +
+                $"{converted} material(s) -> {(unlit ? "URP/Unlit" : "URP/Lit")}");
 
             // 3. Save wrapper prefab (references persistent imported assets)
             string prefabPath = $"{assetDir}/_Background.prefab";

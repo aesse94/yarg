@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -22,6 +22,11 @@ namespace YARG.Settings.Metadata
             SettingsManager.Settings.CustomVocalsCharacter.UpdateValues();
             SettingsManager.Settings.CustomVocalsCharacterFemale.UpdateValues();
             SettingsManager.Settings.CustomGuitar.UpdateValues();
+            SettingsManager.Settings.CustomGuitarCharacter.UpdateValues();
+            SettingsManager.Settings.CustomBassCharacter.UpdateValues();
+            SettingsManager.Settings.CustomDrumsCharacter.UpdateValues();
+            SettingsManager.Settings.CustomKeysCharacter.UpdateValues();
+            SettingsManager.Settings.CustomVenue.UpdateValues();
         }
         // Prefabs needed for this tab type
         private static GameObject _headerPrefab;

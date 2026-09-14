@@ -628,6 +628,7 @@ namespace YARG.Gameplay
                 }).ToArray(),
                 BandScore = BandScore,
                 BandStars = (int) BandStars,
+                SongFailed = PlayerHasFailed,
                 ReplayInfo = replayInfo,
             };
 
@@ -899,6 +900,8 @@ namespace YARG.Gameplay
             if (!PlayerHasFailed)
             {
                 PlayerHasFailed = true;
+
+                GlobalAudioHandler.PlaySoundEffect(SfxSample.SongLose);
 
                 if (_players.Count > 1)
                 {

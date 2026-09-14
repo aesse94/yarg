@@ -602,7 +602,12 @@ namespace YARG.Settings
             public CustomCharacterSetting CustomVocalsCharacter { get; } = new(string.Empty, VenueCharacter.CharacterType.Vocals, CustomCharacterCallback);
             public CustomCharacterSetting CustomVocalsCharacterFemale { get; } = new(string.Empty, VenueCharacter.CharacterType.Vocals, CustomCharacterCallback);
             public ToggleSetting AutoSelectVocalistByGender { get; } = new(true);
+            public CustomCharacterSetting CustomGuitarCharacter { get; } = new(string.Empty, VenueCharacter.CharacterType.Guitar, CustomCharacterCallback);
+            public CustomCharacterSetting CustomBassCharacter { get; } = new(string.Empty, VenueCharacter.CharacterType.Bass, CustomCharacterCallback);
+            public CustomCharacterSetting CustomDrumsCharacter { get; } = new(string.Empty, VenueCharacter.CharacterType.Drums, CustomCharacterCallback);
+            public CustomCharacterSetting CustomKeysCharacter { get; } = new(string.Empty, VenueCharacter.CharacterType.Keys, CustomCharacterCallback);
             public CustomGuitarSetting CustomGuitar { get; } = new(string.Empty, CustomGuitarCallback);
+            public CustomVenueSetting CustomVenue { get; } = new(string.Empty);
             #endregion
 
             #region Helpers

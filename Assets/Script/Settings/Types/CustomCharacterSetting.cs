@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
@@ -11,7 +11,9 @@ namespace YARG.Settings.Types
 {
     public class CustomCharacterSetting : DropdownSetting<string>
     {
-        private VenueCharacter.CharacterType _characterType;
+        /// <summary>The venue slot this dropdown fills, regardless of the picked
+        /// character's exported type.</summary>
+        public VenueCharacter.CharacterType Slot { get; }
         private Dictionary<string, string>   _fileToName = new();
 
         private const string CHARACTER_FOLDER = "characters";
@@ -34,7 +36,35 @@ namespace YARG.Settings.Types
         public CustomCharacterSetting(string value, VenueCharacter.CharacterType characterType, Action<string> onChange = null) :
             base(value, onChange, localizable: false)
         {
-            _characterType = characterType;
+            Slot = characterType;
+        }
+
+        // Shared across every CustomCharacterSetting instance. MetadataTab.OnTabEnter calls
+        // UpdateValues on SIX of these (vocals, vocals-female, guitar, bass, drums, keys), all
+        // scanning the same folder and - because every character is offered for every slot -
+        // all producing the identical list. Each scan does a synchronous
+        // AssetBundle.LoadFromFile plus a full prefab deserialise per character, on the main
+        // thread. Measured headless with 10 characters: ~1.72 s per instance, 10.35 s total -
+        // over twice the 5 s Windows allows before declaring a window hung (Event 1002).
+        // That was the Settings "crash".
+        //
+        // So scan at most once per folder state and let every instance reuse the result. The
+        // signature covers path + size + write time, so adding, removing or rebuilding a
+        // bundle still triggers a rescan - the reason the rescan exists is preserved.
+        private static string _scanSignature;
+        private static readonly List<(string file, string name)> _scanResult = new();
+
+        private static string BuildSignature(string[] files)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var f in files)
+            {
+                var info = new FileInfo(f);
+                sb.Append(f).Append('|').Append(info.Length).Append('|')
+                  .Append(info.LastWriteTimeUtc.Ticks).Append(';');
+            }
+
+            return sb.ToString();
         }
 
         public override void UpdateValues()
@@ -45,6 +75,25 @@ namespace YARG.Settings.Types
 
             var folder = CustomCharacterPath;
             string[] files = Directory.Exists(folder) ? Directory.GetFiles(folder, "*.yargchar") : Array.Empty<string>();
+            Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+
+            string signature = BuildSignature(files);
+            if (signature != _scanSignature)
+            {
+                ScanCharacters(files);
+                _scanSignature = signature;
+            }
+
+            foreach (var (file, name) in _scanResult)
+            {
+                _possibleValues.Add(file);
+                _fileToName[file] = name;
+            }
+        }
+
+        private static void ScanCharacters(string[] files)
+        {
+            _scanResult.Clear();
 
             // Load the AssetBundles and pull the character names from the VrmInstance (and use the filename as a fallback for the display name)
             foreach (var file in files)
@@ -55,7 +104,7 @@ namespace YARG.Settings.Types
                     continue;
                 }
 
-                var character = bundle.LoadAsset<GameObject>(BundleBackgroundManager.CHARACTER_PREFAB_PATH.ToLowerInvariant());
+                var character = BundleBackgroundManager.LoadCharacterPrefab(bundle);
                 if (character == null)
                 {
                     bundle.Unload(true);
@@ -80,11 +129,12 @@ namespace YARG.Settings.Types
                     name = Path.GetFileNameWithoutExtension(file);
                 }
 
-                var venueCharacter = character.GetComponent<VenueCharacter>();
-                if (venueCharacter != null && venueCharacter.Type == _characterType)
+                // Every character is offered for every slot. Which slot a character fills is
+                // decided by the dropdown it was picked from, not by the type baked in at
+                // export - that is what lets a vocalist be put on guitar, or a drummer sing.
+                if (character.GetComponent<VenueCharacter>() != null)
                 {
-                    _possibleValues.Add(file);
-                    _fileToName[file] = name;
+                    _scanResult.Add((file, name));
                 }
 
                 bundle.Unload(true);
